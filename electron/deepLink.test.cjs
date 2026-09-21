@@ -62,7 +62,7 @@ test("collectPuttyStyleDeepLinkUrls converts PuTTY argv when no ssh:// token is 
   );
 });
 
-test("collectPuttyStyleDeepLinkUrls leaves ssh:// tokens to the existing collector", () => {
+test("collectPuttyStyleDeepLinkUrls prefers explicit Xshell -url launches", () => {
   assert.deepEqual(
     collectPuttyStyleDeepLinkUrls([
       "Netcatty.exe",
@@ -71,7 +71,7 @@ test("collectPuttyStyleDeepLinkUrls leaves ssh:// tokens to the existing collect
       "-ssh",
       "ignored@host",
     ]),
-    { ssh: [], telnet: [] },
+    { ssh: ["ssh://alice@example.com"], telnet: [] },
   );
 });
 
