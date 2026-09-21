@@ -125,3 +125,25 @@ test("terminal auto reconnect can start from live or fully hibernated runtimes",
     false,
   );
 });
+
+
+test("ephemeral one-time credential sessions never auto reconnect", () => {
+  assert.equal(
+    shouldAutoReconnectAfterExit({
+      evt: { reason: "closed" },
+      host: { ...sshHost, ephemeral: true },
+      terminalSettings: { sshAutoReconnectEnabled: true },
+      hasEverConnected: true,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldContinueAutoReconnectAfterFailure({
+      host: { ...sshHost, ephemeral: true },
+      terminalSettings: { sshAutoReconnectEnabled: true },
+      loopActive: true,
+    }),
+    false,
+  );
+});
