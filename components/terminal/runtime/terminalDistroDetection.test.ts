@@ -146,3 +146,33 @@ test("a superseded Windows detection cannot update the newer connection", async 
   } as never, 'reconnected', registerConnectionToken('reconnected'));
   assert.deepEqual(detected, []);
 });
+
+
+test("runDistroDetection skips sibling exec probes for bastion-mode sessions", async () => {
+  let remoteInfoCalls = 0;
+  let distroProbeCalls = 0;
+  const token = registerConnectionToken("bastion-session");
+
+  await runDistroDetection({
+    host: {
+      id: "bastion-host",
+      label: "Sangfor OSM",
+      hostname: "10.170.10.46",
+      username: "ephemeral",
+      bastionMode: true,
+    },
+    terminalBackend: {
+      getSessionRemoteInfo: async () => {
+        remoteInfoCalls += 1;
+        return { success: true, remoteSshVersion: "APACHE-SSHD-2.10.0" };
+      },
+      getSessionDistroInfo: async () => {
+        distroProbeCalls += 1;
+        throw new Error("bastion mode must not open a sibling exec channel");
+      },
+    },
+  } as never, "bastion-session", token);
+
+  assert.equal(remoteInfoCalls, 1);
+  assert.equal(distroProbeCalls, 0);
+});
