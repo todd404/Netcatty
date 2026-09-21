@@ -62,6 +62,28 @@ function parseXshellCommandLineTokens(argv) {
 
     if (flag === "-newwin" || flag === "/newwin") {
       consumedIndices.add(index);
+      const directOperandIndex = index + 1;
+      const directOperand = argv[directOperandIndex];
+      // Xshell also accepts: -newwin ssh://user:pass@host:port
+      // without a separate -url switch.
+      if (
+        typeof directOperand === "string"
+        && !directOperand.startsWith("-")
+        && !directOperand.startsWith("/")
+      ) {
+        const parsed = parseXshellUrl(directOperand);
+        if (parsed) {
+          if (result) {
+            return { result: null, consumedIndices, operandIndices, credentialIndices };
+          }
+          result = parsed;
+          sawUrlFlag = true;
+          consumedIndices.add(directOperandIndex);
+          operandIndices.add(directOperandIndex);
+          if (parsed.password !== undefined) credentialIndices.add(directOperandIndex);
+          index = directOperandIndex;
+        }
+      }
       continue;
     }
 
