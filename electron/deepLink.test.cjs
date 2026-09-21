@@ -698,3 +698,45 @@ test("SecureCRT launches preserve dash-shaped values and Electron switches", () 
     "/TITLEBAR", "-serial", "/L", "-raw", "/PASSWORD", "-telnet",
   ]), { ssh: [{ rawUrl: "ssh://-raw:-telnet@host", viaCommandLine: true }], telnet: [] });
 });
+
+
+test("collectSshDeepLinkQueueItems treats Xshell -url as an explicit CLI launch", () => {
+  assert.deepEqual(
+    collectSshDeepLinkQueueItems([
+      String.raw`C:\\Program Files\\Netcatty\\Netcatty.exe`,
+      "-newwin",
+      "-url",
+      "ssh://alice:s3cret@10.0.0.8:12024",
+    ], { includeSchemeUrls: false }),
+    {
+      ssh: [{
+        rawUrl: "ssh://alice:s3cret@10.0.0.8:12024",
+        viaCommandLine: true,
+        launchSource: "xshell",
+      }],
+      telnet: [],
+    },
+  );
+});
+
+test("collectSshDeepLinkUrls does not double-route Xshell -url operands", () => {
+  assert.deepEqual(
+    collectSshDeepLinkUrls([
+      "Netcatty.exe",
+      "-url",
+      "ssh://alice:s3cret@10.0.0.8:12024",
+    ]),
+    [],
+  );
+});
+
+test("collectPuttyStyleDeepLinkUrls accepts Xshell-style SSH URLs", () => {
+  assert.deepEqual(
+    collectPuttyStyleDeepLinkUrls([
+      "Netcatty.exe",
+      "-url",
+      "ssh://alice:s3cret@10.0.0.8:12024",
+    ]),
+    { ssh: ["ssh://alice:s3cret@10.0.0.8:12024"], telnet: [] },
+  );
+});
