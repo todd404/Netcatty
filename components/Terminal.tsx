@@ -1186,7 +1186,9 @@ const TerminalComponent: React.FC<TerminalProps> = ({
   // network devices. See isNetworkDevice above for why the gating uses the
   // raw detected distro / explicit deviceType (not getEffectiveHostDistro);
   // #674 covers the AAA-log-flood motivation for stats specifically.
-  const isSupportedOs = shouldCollectServerStats(host, undefined, null);
+  const isSupportedOs = host.bastionMode === true
+    ? false
+    : shouldCollectServerStats(host, undefined, null);
   const isSystemSidebarEligible =
     !!onOpenSystem &&
     isSupportedOs &&
