@@ -334,7 +334,10 @@ export function useTerminalEffects(ctx: TerminalEffectsContext) {
         // SSH banner, which is captured for free at handshake time.
         const info = await terminalBackend.getSessionRemoteInfo?.(id);
         if (cancelled || id !== sessionRef.current) return;
-        if (!shouldProbeSessionCwd({ isNetworkDevice, remoteSshVersion: info?.remoteSshVersion })) {
+        if (!shouldProbeSessionCwd({
+          isNetworkDevice: isNetworkDevice || host.bastionMode === true,
+          remoteSshVersion: info?.remoteSshVersion,
+        })) {
           return;
         }
         const result = await terminalBackend.getSessionPwd(id);
@@ -350,7 +353,7 @@ export function useTerminalEffects(ctx: TerminalEffectsContext) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [host.protocol, status, terminalBackend, terminalCwdTracker, isNetworkDevice]);
+  }, [host.protocol, host.bastionMode, status, terminalBackend, terminalCwdTracker, isNetworkDevice]);
 
 
   useEffect(() => {
