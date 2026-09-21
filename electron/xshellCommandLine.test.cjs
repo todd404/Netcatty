@@ -76,3 +76,22 @@ test("redactXshellCommandLineCredentials masks embedded password", () => {
     "ssh://alice:********@example.com:12024",
   ]);
 });
+
+
+test("parseXshellCommandLine accepts Xshell -newwin URL without -url", () => {
+  assert.deepEqual(
+    parseXshellCommandLine([
+      "Netcatty.exe",
+      "-newwin",
+      "ssh://carol:otp@10.170.10.46:12024",
+    ]),
+    {
+      protocol: "ssh",
+      url: "ssh://carol:otp@10.170.10.46:12024",
+      hostname: "10.170.10.46",
+      username: "carol",
+      password: "otp",
+      port: 12024,
+    },
+  );
+});
