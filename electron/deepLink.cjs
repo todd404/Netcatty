@@ -147,7 +147,7 @@ function collectSshDeepLinkQueueItems(argv, { includeSchemeUrls = true } = {}) {
     const item = {
       rawUrl: parsed.url,
       viaCommandLine: true,
-      launchSource: launch.launchSource,
+      ...(launch.launchSource === "xshell" ? { launchSource: "xshell" } : {}),
     };
     if (parsed.protocol === TELNET_PROTOCOL) queueItems.telnet.push(item);
     else queueItems.ssh.push(item);
