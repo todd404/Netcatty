@@ -77,6 +77,7 @@ const {
   getSshDeepLinkRendererReadyTimeoutMs,
   redactPuttyCommandLinePasswords,
   redactSecureCrtCommandLinePasswords,
+  redactXshellCommandLineCredentials,
   isJmsDeepLinkUrl,
   isSshDeepLinkUrl,
   isTelnetDeepLinkUrl,
@@ -708,6 +709,7 @@ const pendingTelnetDeepLinkUrls = [...initialDeepLinkQueueItems.telnet];
 const rawLaunchArgvForHandoff = [...process.argv];
 // SecureCRT operands may contain PuTTY switch names; scrub them first.
 redactSecureCrtCommandLinePasswords(process.argv);
+redactXshellCommandLineCredentials(process.argv);
 redactPuttyCommandLinePasswords(process.argv);
 const pendingOpenTerminalPaths = resolveOpenTerminalPathsFromArgs(process.argv);
 let flushingSshDeepLinks = false;
@@ -723,10 +725,14 @@ let jmsDeepLinkDeliveryGeneration = 0;
 
 let explorerContextMenuEnabled = resolveExplorerContextMenuEnabled({ app }).enabled === true;
 
-function queueSshDeepLink(rawUrl, { viaCommandLine = false } = {}) {
+function queueSshDeepLink(rawUrl, { viaCommandLine = false, launchSource } = {}) {
   if (!viaCommandLine && !sshDeepLinkEnabled) return;
   if (!isSshDeepLinkUrl(rawUrl)) return;
-  pendingSshDeepLinkUrls.push({ rawUrl, viaCommandLine });
+  pendingSshDeepLinkUrls.push({
+    rawUrl,
+    viaCommandLine,
+    ...(launchSource ? { launchSource } : {}),
+  });
   if (app.isReady?.()) {
     void flushPendingSshDeepLinks();
   }
@@ -935,7 +941,7 @@ async function flushPendingJmsDeepLinks() {
   }
 }
 
-async function deliverSshDeepLink(rawUrl, expectedGeneration = sshSchemeDeliveryGeneration, { viaCommandLine = false } = {}) {
+async function deliverSshDeepLink(rawUrl, expectedGeneration = sshSchemeDeliveryGeneration, { viaCommandLine = false, launchSource } = {}) {
   // The ssh:// preference can flip while a delivery is waiting for the
   // renderer, so re-check it at every gate instead of reusing the queue-time
   // snapshot. Command-line (PuTTY-style) launches bypass the preference.
@@ -958,7 +964,10 @@ async function deliverSshDeepLink(rawUrl, expectedGeneration = sshSchemeDelivery
   const result = await windowManager.sendWhenRendererReady?.(
     win,
     SSH_DEEP_LINK_CHANNEL,
-    { url: rawUrl },
+    {
+      url: rawUrl,
+      ...(launchSource ? { launchSource } : {}),
+    },
     {
       timeoutMs: getSshDeepLinkRendererReadyTimeoutMs({ isDev }),
       shouldSend: shouldDeliver,
@@ -1015,6 +1024,7 @@ async function flushPendingSshDeepLinks() {
       const expectedGeneration = sshSchemeDeliveryGeneration;
       const result = await deliverSshDeepLink(item.rawUrl, expectedGeneration, {
         viaCommandLine: item.viaCommandLine === true,
+        launchSource: item.launchSource,
       });
       if (shouldRequeueFailedSshDeepLinkDelivery({
         enabled: item.viaCommandLine === true || sshDeepLinkEnabled,
@@ -1247,6 +1257,7 @@ if (!gotLock) {
       includeSchemeUrls: sshDeepLinkEnabled,
     });
     redactSecureCrtCommandLinePasswords(secondInstanceArgv);
+    redactXshellCommandLineCredentials(secondInstanceArgv);
     redactPuttyCommandLinePasswords(secondInstanceArgv);
     if (rawLaunchArgv) {
       // Parsing and subsequent routing use the independent ordered copy.
@@ -1269,7 +1280,10 @@ if (!gotLock) {
     }
     if (deepLinkQueueItems.ssh.length > 0) {
       deepLinkQueueItems.ssh.forEach((item) => {
-        queueSshDeepLink(item.rawUrl, { viaCommandLine: item.viaCommandLine });
+        queueSshDeepLink(item.rawUrl, {
+          viaCommandLine: item.viaCommandLine,
+          launchSource: item.launchSource,
+        });
       });
       return;
     }
