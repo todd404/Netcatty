@@ -1464,14 +1464,15 @@ export function AppSideEffects() {
   // Idle/background/manual locks keep children mounted under the overlay. Queue
   // deep links until unlock so saved-credential connects cannot start behind
   // the lock screen.
+  type SshDeepLinkPayload = { url?: string; launchSource?: 'xshell' };
   const pendingDeepLinksWhileLockedRef = useRef<Array<
-    | { kind: 'ssh'; payload: { url?: string } }
+    | { kind: 'ssh'; payload: SshDeepLinkPayload }
     | { kind: 'telnet'; payload: { url?: string } }
     | { kind: 'jms'; payload: { url?: string } }
     | { kind: 'open-terminal-path'; payload: { path?: string } }
   >>([]);
 
-  const _processSshDeepLink = useEffectEvent((payload: { url?: string }) => {
+  const _processSshDeepLink = useEffectEvent((payload: SshDeepLinkPayload) => {
     startupLaunchIntentReceivedRef.current = true;
     const rawUrl = payload?.url || '';
     const target = parseSshDeepLink(rawUrl);
@@ -1479,6 +1480,12 @@ export function AppSideEffects() {
       toast.warning(t('deepLink.ssh.invalid'));
       return;
     }
+    // Sangfor OSM's character proxy uses port 12024. Depending on Xshell
+    // version/configuration the launcher may pass either "-url ssh://..." or a
+    // bare ssh:// URL, so key compatibility mode off the proxy port rather
+    // than the argv spelling. The proxy accepts the primary PTY shell but may
+    // reset the transport when clients open automatic sibling exec channels.
+    const useBastionMode = target.port === 12024;
 
     const effectiveHosts = hosts.map((host) => {
       const effectiveHost = resolveEffectiveHost(host);
@@ -1501,8 +1508,11 @@ export function AppSideEffects() {
       const ephemeralHost = matchedEffectiveHost
         ? buildSshDeepLinkEphemeralHostFromSaved(matchedEffectiveHost, target, draftOptions)
         : buildSshDeepLinkEphemeralHost(target, draftOptions);
-      setEphemeralHosts((prev) => [...prev, ephemeralHost]);
-      handleConnectToHost(ephemeralHost);
+      const connectionHost = useBastionMode
+        ? { ...ephemeralHost, bastionMode: true }
+        : ephemeralHost;
+      setEphemeralHosts((prev) => [...prev, connectionHost]);
+      handleConnectToHost(connectionHost);
       return;
     }
 
@@ -1520,7 +1530,7 @@ export function AppSideEffects() {
     setActiveTabId('vault');
   });
 
-  const _handleSshDeepLink = useEffectEvent((payload: { url?: string }) => {
+  const _handleSshDeepLink = useEffectEvent((payload: SshDeepLinkPayload) => {
     if (shouldDeferExternalActionWhileAppLocked({ locked: appLockLocked })) {
       pendingDeepLinksWhileLockedRef.current.push({ kind: 'ssh', payload: payload || {} });
       return;

@@ -1174,7 +1174,7 @@ const TerminalLayerInner: React.FC<TerminalLayerProps> = ({
           host.deviceType === 'network' || detectedDeviceClass === 'network-device';
         const info = await terminalBackend.getSessionRemoteInfo?.(sessionId);
         return shouldProbeSessionCwd({
-          isNetworkDevice,
+          isNetworkDevice: isNetworkDevice || host.bastionMode === true,
           remoteSshVersion: info?.remoteSshVersion,
         });
       },

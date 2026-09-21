@@ -724,7 +724,7 @@ export const createTerminalSessionStarters = (ctx: TerminalSessionStartersContex
           // Only an explicit Copy/Split may share an existing login. Ordinary
           // opens and reconnects must authenticate again to refresh remote groups.
           reuseTransport: sourceSessionId ? undefined : false,
-          skipShellPidDiscovery: ctx.isNetworkDevice === true,
+          skipShellPidDiscovery: ctx.isNetworkDevice === true || ctx.host.bastionMode === true,
         });
         if (!requiresFreshSshConnection) {
           ctx.onConnectAutomationSnapshotCommitted?.();

@@ -8,6 +8,10 @@ const {
   parseSecureCrtCommandLineTokens,
   redactSecureCrtCommandLinePasswords,
 } = require("./secureCrtCommandLine.cjs");
+const {
+  parseXshellCommandLineTokens,
+  redactXshellCommandLineCredentials,
+} = require("./xshellCommandLine.cjs");
 
 const SSH_DEEP_LINK_CHANNEL = "netcatty:deepLink:ssh";
 const TELNET_DEEP_LINK_CHANNEL = "netcatty:deepLink:telnet";
@@ -27,15 +31,22 @@ function isDeepLinkUrl(rawUrl, protocol) {
 // On success, also exclude the remaining consumed launch tokens.
 function collectSchemeUrlCandidates(argv) {
   if (!Array.isArray(argv)) return [];
-  const tokens = parseSecureCrtCommandLineTokens(argv);
-  if (!tokens) return argv;
   const filterIndices = new Set();
-  if (tokens.operandIndices instanceof Set) {
-    for (const index of tokens.operandIndices) filterIndices.add(index);
+  const commandLineParsers = [
+    parseSecureCrtCommandLineTokens(argv),
+    parseXshellCommandLineTokens(argv),
+  ];
+
+  for (const tokens of commandLineParsers) {
+    if (!tokens) continue;
+    if (tokens.operandIndices instanceof Set) {
+      for (const index of tokens.operandIndices) filterIndices.add(index);
+    }
+    if (tokens.result && tokens.consumedIndices instanceof Set) {
+      for (const index of tokens.consumedIndices) filterIndices.add(index);
+    }
   }
-  if (tokens.result && tokens.consumedIndices instanceof Set) {
-    for (const index of tokens.consumedIndices) filterIndices.add(index);
-  }
+
   if (filterIndices.size === 0) return argv;
   return argv.filter((_, index) => !filterIndices.has(index));
 }
@@ -68,6 +79,46 @@ function collectJmsDeepLinkUrls(argv) {
   return collectDeepLinkUrls(argv, JMS_PROTOCOL);
 }
 
+function collectCommandLineDeepLink(argv) {
+  // Explicit Xshell controls own the launch. If they are present but invalid,
+  // fail closed instead of reinterpreting their operands as another client.
+  const xshell = parseXshellCommandLineTokens(argv);
+  if (xshell) {
+    return xshell.result?.url
+      ? { parsed: xshell.result, launchSource: "xshell" }
+      : null;
+  }
+
+  // A genuine standalone scheme URL is handled by the normal protocol path.
+  // Do not let unrelated SecureCRT/PuTTY-looking tokens inherit credentials
+  // into an extra CLI connection.
+  if (
+    collectSshDeepLinkUrls(argv).length > 0
+    || collectTelnetDeepLinkUrls(argv).length > 0
+    || collectJmsDeepLinkUrls(argv).length > 0
+  ) {
+    return null;
+  }
+
+  // SecureCRT-style switches (/SSH2 /L user /P 22 /PASSWORD pass host) are
+  // authoritative when present. A malformed SecureCRT launch must not fall
+  // through to PuTTY parsing, because password/option values can look like
+  // PuTTY switches.
+  const secureCrt = parseSecureCrtCommandLineTokens(argv);
+  if (secureCrt) {
+    return secureCrt.result?.url
+      ? { parsed: secureCrt.result, launchSource: "securecrt" }
+      : null;
+  }
+
+  const putty = parsePuttyCommandLine(argv);
+  if (putty?.url) {
+    return { parsed: putty, launchSource: "putty" };
+  }
+
+  return null;
+}
+
 function collectPuttyStyleDeepLinkUrls(argv) {
   if (
     collectSshDeepLinkUrls(argv).length > 0
@@ -77,12 +128,8 @@ function collectPuttyStyleDeepLinkUrls(argv) {
     return { ssh: [], telnet: [] };
   }
 
-  // SecureCRT-style switches (/SSH2 /L user /P 22 /PASSWORD pass host) are
-  // tried first: bastion/4A launchers configured as "SecureCRT" emit them, and
-  // the flag sets are disjoint from PuTTY-style dashes, so trying SecureCRT
-  // first then falling back to PuTTY covers both callers (#3390, #3044).
-  const secureCrt = parseSecureCrtCommandLineTokens(argv);
-  const parsed = secureCrt ? secureCrt.result : parsePuttyCommandLine(argv);
+  const launch = collectCommandLineDeepLink(argv);
+  const parsed = launch?.parsed;
   if (!parsed?.url) return { ssh: [], telnet: [] };
   if (parsed.protocol === TELNET_PROTOCOL) {
     return { ssh: [], telnet: [parsed.url] };
@@ -98,11 +145,11 @@ function collectPuttyStyleDeepLinkUrls(argv) {
  * gated by includeSchemeUrls through the scheme-URL part of the queue.
  */
 function collectSshDeepLinkQueueItems(argv, { includeSchemeUrls = true } = {}) {
-  const puttyStyleDeepLinks = collectPuttyStyleDeepLinkUrls(argv);
   const queueItems = {
     ssh: [],
     telnet: [],
   };
+
   if (includeSchemeUrls) {
     collectSshDeepLinkUrls(argv).forEach((rawUrl) => {
       queueItems.ssh.push({ rawUrl, viaCommandLine: false });
@@ -111,12 +158,19 @@ function collectSshDeepLinkQueueItems(argv, { includeSchemeUrls = true } = {}) {
       queueItems.telnet.push({ rawUrl, viaCommandLine: false });
     });
   }
-  puttyStyleDeepLinks.ssh.forEach((rawUrl) => {
-    queueItems.ssh.push({ rawUrl, viaCommandLine: true });
-  });
-  puttyStyleDeepLinks.telnet.forEach((rawUrl) => {
-    queueItems.telnet.push({ rawUrl, viaCommandLine: true });
-  });
+
+  const launch = collectCommandLineDeepLink(argv);
+  const parsed = launch?.parsed;
+  if (parsed?.url) {
+    const item = {
+      rawUrl: parsed.url,
+      viaCommandLine: true,
+      ...(launch.launchSource === "xshell" ? { launchSource: "xshell" } : {}),
+    };
+    if (parsed.protocol === TELNET_PROTOCOL) queueItems.telnet.push(item);
+    else queueItems.ssh.push(item);
+  }
+
   return queueItems;
 }
 
@@ -467,6 +521,7 @@ module.exports = {
   collectTelnetDeepLinkUrls,
   redactPuttyCommandLinePasswords,
   redactSecureCrtCommandLinePasswords,
+  redactXshellCommandLineCredentials,
   isJmsDeepLinkUrl,
   isSshDeepLinkUrl,
   isTelnetDeepLinkUrl,

@@ -8,6 +8,7 @@ type AutoReconnectHost = {
   hostname?: string;
   moshEnabled?: boolean;
   etEnabled?: boolean;
+  ephemeral?: boolean;
 };
 
 type AutoReconnectSettings = Pick<TerminalSettings, "sshAutoReconnectEnabled"> | undefined | null;
@@ -21,6 +22,7 @@ export function isAutoReconnectableSshHost(host: AutoReconnectHost): boolean {
   return (
     protocol === "ssh" &&
     host.hostname !== "localhost" &&
+    host.ephemeral !== true &&
     host.moshEnabled !== true &&
     host.etEnabled !== true
   );

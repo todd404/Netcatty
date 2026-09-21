@@ -183,6 +183,10 @@ export interface Host {
   // Runtime marker for in-memory-only hosts (e.g. password deep links).
   // Ephemeral hosts are never persisted to the vault or session restore.
   ephemeral?: boolean;
+  // Runtime-only compatibility mode for bastion/PAM sessions that permit the
+  // primary interactive shell but tear down the transport when Netcatty opens
+  // automatic sibling exec channels (cwd/distro/stats/PID probes).
+  bastionMode?: boolean;
   // Runtime hint for deep-link launches that target file transfer (e.g.
   // JumpServer sftp payloads): auto-open the SFTP side panel on connect.
   autoOpenSftpPanel?: boolean;
