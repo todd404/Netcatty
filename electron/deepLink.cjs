@@ -80,17 +80,35 @@ function collectJmsDeepLinkUrls(argv) {
 }
 
 function collectCommandLineDeepLink(argv) {
+  // Explicit Xshell controls own the launch. If they are present but invalid,
+  // fail closed instead of reinterpreting their operands as another client.
   const xshell = parseXshellCommandLineTokens(argv);
-  if (xshell?.result?.url) {
-    return { parsed: xshell.result, launchSource: "xshell" };
+  if (xshell) {
+    return xshell.result?.url
+      ? { parsed: xshell.result, launchSource: "xshell" }
+      : null;
+  }
+
+  // A genuine standalone scheme URL is handled by the normal protocol path.
+  // Do not let unrelated SecureCRT/PuTTY-looking tokens inherit credentials
+  // into an extra CLI connection.
+  if (
+    collectSshDeepLinkUrls(argv).length > 0
+    || collectTelnetDeepLinkUrls(argv).length > 0
+    || collectJmsDeepLinkUrls(argv).length > 0
+  ) {
+    return null;
   }
 
   // SecureCRT-style switches (/SSH2 /L user /P 22 /PASSWORD pass host) are
-  // tried before PuTTY-style dashes so 4A/PAM launchers keep their native
-  // argument semantics (#3390, #3044).
+  // authoritative when present. A malformed SecureCRT launch must not fall
+  // through to PuTTY parsing, because password/option values can look like
+  // PuTTY switches.
   const secureCrt = parseSecureCrtCommandLineTokens(argv);
-  if (secureCrt?.result?.url) {
-    return { parsed: secureCrt.result, launchSource: "securecrt" };
+  if (secureCrt) {
+    return secureCrt.result?.url
+      ? { parsed: secureCrt.result, launchSource: "securecrt" }
+      : null;
   }
 
   const putty = parsePuttyCommandLine(argv);
