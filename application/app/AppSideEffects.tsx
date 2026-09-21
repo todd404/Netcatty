@@ -1480,11 +1480,12 @@ export function AppSideEffects() {
       toast.warning(t('deepLink.ssh.invalid'));
       return;
     }
-    // Sangfor OSM's Xshell launch path uses its character proxy on 12024.
-    // The proxy accepts the primary PTY shell but may reset the transport when
-    // clients open automatic sibling exec channels, so mark this ephemeral
-    // launch for single-channel bastion compatibility.
-    const useBastionMode = payload?.launchSource === 'xshell' && target.port === 12024;
+    // Sangfor OSM's character proxy uses port 12024. Depending on Xshell
+    // version/configuration the launcher may pass either "-url ssh://..." or a
+    // bare ssh:// URL, so key compatibility mode off the proxy port rather
+    // than the argv spelling. The proxy accepts the primary PTY shell but may
+    // reset the transport when clients open automatic sibling exec channels.
+    const useBastionMode = target.port === 12024;
 
     const effectiveHosts = hosts.map((host) => {
       const effectiveHost = resolveEffectiveHost(host);
